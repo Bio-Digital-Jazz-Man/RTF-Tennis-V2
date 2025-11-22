@@ -79,7 +79,6 @@ function Point.new(player1: Player, player2: Player, Server: number, Game, Side:
 end
 
 -- Serve fault visualization helpers ----------------------------------------
--- ADDED ---------------------------------------------------------------------
 local function setBoxRed(box)
     for _, v in pairs(box:GetChildren()) do
         if v:IsA("Part") then
@@ -98,7 +97,7 @@ local function clearBox(box)
         end
     end
 end
--- END ADDED -----------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 
 -- Validate a reported hit
 function Point:_validateHit(eventData, expectedPlayer: Player, windowStart: number, windowEnd: number, predictedBounceAbs: number, currentBaked, currentStartTime: number)
@@ -217,7 +216,7 @@ function Point:Start(): number
 
     local function resetServeBoxes()
         for _, box in pairs({ self.Court.ServeBox1R, self.Court.ServeBox1L, self.Court.ServeBox2R, self.Court.ServeBox2L }) do
-            clearBox(box) -- UPDATED: clears transparency/visibility
+            clearBox(box)
         end
     end
 
@@ -226,12 +225,11 @@ function Point:Start(): number
             if v:IsA("Part") then
                 v.CanCollide = true
                 v.Transparency = 0.9
-                v.Color = Color3.new(1,1,1)
+                v.Color = Color3.new(1, 1, 1)
             end
         end
     end
 
-    -- ADDED: determine which box belongs to server
     local function getServerBox()
         if serverIndex == 1 then
             return (self.Side == "Deuce") and self.Court.ServeBox1R or self.Court.ServeBox1L
@@ -288,7 +286,14 @@ function Point:Start(): number
 
         currentBaked = select(1, bakeToss())
         currentStartTime = now()
-        broadcast(currentBaked, nil)
+
+        -- IMPORTANT: toss only goes to the server, not all clients
+        BallTrajectory:FireClient(ServePlayer, {
+            baked = currentBaked,
+            fromUserId = nil,
+            lastHitUserId = nil,
+            phase = "Toss",
+        })
 
         local bounceImpact = nextImpactOfKind(currentBaked, "Court")
         local predictedBounceAbs = bounceImpact and (currentStartTime + bounceImpact.t) or (currentStartTime + 2)
@@ -298,7 +303,7 @@ function Point:Start(): number
         local hitResult = self:_awaitHit(ServePlayer, windowStart, windowEnd, predictedBounceAbs, currentBaked, currentStartTime, hitInbox)
 
         if hitResult and hitResult.ok then
-            warn("VALID SERVE by " .. ServePlayer.Name) -- ADDED LOGGING
+            warn("VALID SERVE by " .. ServePlayer.Name)
 
             currentBaked = hitResult.baked
             currentStartTime = hitResult.time
@@ -307,18 +312,18 @@ function Point:Start(): number
             local firstImpact = currentBaked.impacts and currentBaked.impacts[1] or nil
             if not firstImpact or firstImpact.kind ~= "Court" then
                 faults += 1
-                warn("INVALID SERVE (did not hit court)") -- ADDED LOGGING
-                setBoxRed(getServerBox())                -- ADDED
-                task.wait(5)                            -- ADDED DELAY
+                warn("INVALID SERVE (did not hit court)")
+                setBoxRed(getServerBox())
+                task.wait(10)
             else
                 break -- serve was valid
             end
 
         else
             faults += 1
-            warn("INVALID SERVE: no valid hit received") -- ADDED
-            setBoxRed(getServerBox())                    -- ADDED
-            task.wait(5)                                -- ADDED DELAY
+            warn("INVALID SERVE: no valid hit received")
+            setBoxRed(getServerBox())
+            task.wait(10)
         end
 
         if faults >= 2 then
