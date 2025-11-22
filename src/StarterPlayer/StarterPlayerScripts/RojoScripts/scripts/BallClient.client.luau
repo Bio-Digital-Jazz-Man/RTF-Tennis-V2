@@ -14,7 +14,7 @@ task.wait(5)
 
 print("BALL CLIENT BALL CLIENT BALL CLIENT")
 
-local Animator = require(Replicated:WaitForChild("Modules"):WaitForChild("BallAnimator"))
+local Animator = require(Replicated:WaitForChild("RojoScripts"):WaitForChild("Modules"):WaitForChild("BallAnimator"))
 local LocalPlayer = Players.LocalPlayer
 
 local ballById: { [string]: BasePart } = {}

@@ -9,7 +9,7 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local ProfileLoadedRE = Remotes:WaitForChild("ProfileLoaded")
 local ChangeSettingsRE = Remotes:WaitForChild("ChangeSettings")
 
-local ClientProfile = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ClientProfile"))
+local ClientProfile = require(ReplicatedStorage:WaitForChild("RojoScripts"):WaitForChild("Modules"):WaitForChild("ClientProfile"))
 
 ProfileLoadedRE.OnClientEvent:Connect(function(serverProfile)
 	ClientProfile.SetFromServer(serverProfile)

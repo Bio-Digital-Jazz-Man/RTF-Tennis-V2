@@ -22,7 +22,7 @@ local HEAD_MAX_PITCH_DEG:  number = 55
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ClientProfile = nil
 pcall(function()
-	ClientProfile = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ClientProfile"))
+	ClientProfile = require(ReplicatedStorage:WaitForChild("RojoScripts"):WaitForChild("Modules"):WaitForChild("ClientProfile"))
 end)
 
 local currentPitchOffset: number = math.rad(18.0) -- default
