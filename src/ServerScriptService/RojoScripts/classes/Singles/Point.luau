@@ -103,6 +103,8 @@ function Point:Start(): number
 	BallTrajectory:FireAllClients(bakedPath)
 
 
+	-- TODO: serving & back and forth logic
+
 	-- ================================
 	-- TODO: Position players for the point (serve side, stance, cameras, HUD)
 	-- e.g., place server at baseline on %s side; place receiver opposite.
