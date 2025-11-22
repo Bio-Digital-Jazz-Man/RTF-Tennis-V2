@@ -309,7 +309,7 @@ function Point:Start(): number
                 faults += 1
                 warn("INVALID SERVE (did not hit court)") -- ADDED LOGGING
                 setBoxRed(getServerBox())                -- ADDED
-                task.wait(10)                            -- ADDED DELAY
+                task.wait(5)                            -- ADDED DELAY
             else
                 break -- serve was valid
             end
@@ -318,7 +318,7 @@ function Point:Start(): number
             faults += 1
             warn("INVALID SERVE: no valid hit received") -- ADDED
             setBoxRed(getServerBox())                    -- ADDED
-            task.wait(10)                                -- ADDED DELAY
+            task.wait(5)                                -- ADDED DELAY
         end
 
         if faults >= 2 then
