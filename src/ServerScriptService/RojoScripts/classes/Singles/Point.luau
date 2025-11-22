@@ -73,14 +73,34 @@ function Point.new(player1: Player, player2: Player, Server: number, Game, Side:
     self.Side = Side               -- "Deuce" or "Ad"
     self.Court = Game.Set.Match.Court
     self.ServerManager = Game.ServerManager
-    print(Game, self.ServerManager)
     self.RemoteController = self.ServerManager.RemoteController
 
     return self
 end
 
--- Validate a reported hit against the current rally window.
--- Returns { ok=true, baked=<server-baked>, time=<hitTime>, info=<string> } or { ok=false, reason=<string> }
+-- Serve fault visualization helpers ----------------------------------------
+-- ADDED ---------------------------------------------------------------------
+local function setBoxRed(box)
+    for _, v in pairs(box:GetChildren()) do
+        if v:IsA("Part") then
+            v.CanCollide = true
+            v.Transparency = 0.1
+            v.Color = Color3.new(1, 0, 0)
+        end
+    end
+end
+
+local function clearBox(box)
+    for _, v in pairs(box:GetChildren()) do
+        if v:IsA("Part") then
+            v.CanCollide = false
+            v.Transparency = 1
+        end
+    end
+end
+-- END ADDED -----------------------------------------------------------------
+
+-- Validate a reported hit
 function Point:_validateHit(eventData, expectedPlayer: Player, windowStart: number, windowEnd: number, predictedBounceAbs: number, currentBaked, currentStartTime: number)
     local player = eventData.player
     local payload = eventData.payload
@@ -117,7 +137,6 @@ function Point:_validateHit(eventData, expectedPlayer: Player, windowStart: numb
     local radius = baked.radius or BallPhysics.DefaultBallRadius or 0.25
     local rebaked = BallPhysics.Bake(first.p, first.v, radius, baked.stepHz)
 
-    -- Compare claimed contact position to where the authoritative trajectory says the ball should be
     local elapsed = math.max(0, claimedTime - currentStartTime)
     local predictedSample = BallPhysics.SampleAtTime(currentBaked, elapsed)
     local delta = (predictedSample and predictedSample.p and first.p) and (predictedSample.p - first.p).Magnitude or math.huge
@@ -138,10 +157,7 @@ function Point:_validateHit(eventData, expectedPlayer: Player, windowStart: numb
     }
 end
 
--- Process incoming hit reports and return the first valid one inside the window.
 function Point:_awaitHit(expectedPlayer: Player, windowStart: number, windowEnd: number, predictedBounceAbs: number, currentBaked, currentStartTime: number, inbox)
-    print(string.format("[POINT] Awaiting hit from %s | windowStart=%.3f | windowEnd=%.3f | predictedBounce=%.3f", expectedPlayer.Name, windowStart, windowEnd, predictedBounceAbs))
-
     while now() <= windowEnd do
         for i = #inbox, 1, -1 do
             local eventData = inbox[i]
@@ -149,29 +165,24 @@ function Point:_awaitHit(expectedPlayer: Player, windowStart: number, windowEnd:
                 local validation = self:_validateHit(eventData, expectedPlayer, windowStart, windowEnd, predictedBounceAbs, currentBaked, currentStartTime)
                 if validation.ok then
                     table.remove(inbox, i)
-                    print("[POINT] Accepted hit | " .. validation.info)
                     return validation
                 else
-                    print(string.format("[POINT] Rejected hit from %s | %s", eventData.player.Name, validation.reason))
                     table.remove(inbox, i)
                 end
             end
         end
         task.wait(0.05)
     end
-
-    print(string.format("[POINT] Hit window closed for %s (no valid hit).", expectedPlayer.Name))
     return nil
 end
 
--- Determine if a baked path dies before a court impact (net/out).
 local function terminalNonCourtImpact(baked)
     if not baked or not baked.impacts then return nil end
     for _, impact in ipairs(baked.impacts) do
         if impact.kind ~= "Court" then
             return impact
         else
-            return nil -- first impact is court, so not terminal non-court
+            return nil
         end
     end
     return nil
@@ -186,7 +197,6 @@ local function sideOfNet(netModel: Model?, pos: Vector3?): string
     return dir > 0 and "Positive" or "Negative"
 end
 
--- Decide the winner based on a dead ball.
 local function decideDeadBallWinner(lastHitterIndex: number, reason: string)
     local winner = lastHitterIndex == 1 and 2 or 1
     return winner, reason .. string.format(" | Winner=P%d", winner)
@@ -195,8 +205,6 @@ end
 function Point:Start(): number
     local serverIndex = self.Server
     local receiverIndex = (serverIndex == 1) and 2 or 1
-
-    print(("\n[POINT] Start | Server=P%d | Side=%s | Mode=%s"):format(serverIndex, self.Side, self.Params.name))
 
     local EnterMatch = self.RemoteController:AddOrGetEvent("EnterMatch")
     EnterMatch:FireClient(self.Player1)
@@ -209,34 +217,34 @@ function Point:Start(): number
 
     local function resetServeBoxes()
         for _, box in pairs({ self.Court.ServeBox1R, self.Court.ServeBox1L, self.Court.ServeBox2R, self.Court.ServeBox2L }) do
-            for _, v in pairs(box:GetChildren()) do
-                if v:IsA("Part") then
-                    v.CanCollide = false
-                    v.Transparency = 1
-                end
-            end
+            clearBox(box) -- UPDATED: clears transparency/visibility
         end
     end
 
-    local function setServeBox(serveBox)
+    local function enableServeBox(serveBox)
         for _, v in pairs(serveBox:GetChildren()) do
             if v:IsA("Part") then
                 v.CanCollide = true
                 v.Transparency = 0.9
+                v.Color = Color3.new(1,1,1)
             end
         end
     end
 
-    resetServeBoxes()
-    if self.Side == "Deuce" then
-        setServeBox(self.Court.ServeBox1R)
-        ServeChar:SetPrimaryPartCFrame(self.Court.ServeR1.CFrame)
-        ReceiveChar:SetPrimaryPartCFrame(self.Court.ServeR2.CFrame)
-    else
-        setServeBox(self.Court.ServeBox1L)
-        ServeChar:SetPrimaryPartCFrame(self.Court.ServeL1.CFrame)
-        ReceiveChar:SetPrimaryPartCFrame(self.Court.ServeL2.CFrame)
+    -- ADDED: determine which box belongs to server
+    local function getServerBox()
+        if serverIndex == 1 then
+            return (self.Side == "Deuce") and self.Court.ServeBox1R or self.Court.ServeBox1L
+        else
+            return (self.Side == "Deuce") and self.Court.ServeBox2R or self.Court.ServeBox2L
+        end
     end
+
+    resetServeBoxes()
+    enableServeBox(getServerBox())
+
+    ServeChar:SetPrimaryPartCFrame(self.Side == "Deuce" and self.Court.ServeR1.CFrame or self.Court.ServeL1.CFrame)
+    ReceiveChar:SetPrimaryPartCFrame(self.Side == "Deuce" and self.Court.ServeR2.CFrame or self.Court.ServeL2.CFrame)
 
     local hitInbox = {}
     local trajConn = BallTrajectory.OnServerEvent:Connect(function(player: Player, payload: any)
@@ -244,13 +252,10 @@ function Point:Start(): number
             return
         end
         table.insert(hitInbox, { player = player, payload = payload, serverTime = now() })
-        print(string.format("[POINT] Received baked trajectory from %s | samples=%d", player.Name, #payload.baked.samples))
     end)
 
     local function cleanup()
-        if trajConn then
-            trajConn:Disconnect()
-        end
+        if trajConn then trajConn:Disconnect() end
     end
 
     local function bakeToss()
@@ -275,114 +280,79 @@ function Point:Start(): number
     local faults = 0
     local winnerIndex: number? = nil
     local endReason = ""
-    local history: { string } = {}
-
-    local function logStep(msg)
-        table.insert(history, msg)
-        print("[POINT] " .. msg)
-    end
 
     -- ================= SERVE LOGIC =================
     for attempt = 1, 2 do
-        logStep(string.format("Serve attempt %d begins", attempt))
+        resetServeBoxes()
+        enableServeBox(getServerBox())
+
         currentBaked = select(1, bakeToss())
         currentStartTime = now()
-        broadcast(currentBaked, ServePlayer)
-        debugImpacts("[POINT][SERVE] Toss", currentBaked)
+        broadcast(currentBaked, nil)
 
         local bounceImpact = nextImpactOfKind(currentBaked, "Court")
         local predictedBounceAbs = bounceImpact and (currentStartTime + bounceImpact.t) or (currentStartTime + 2)
         local windowStart = currentStartTime
         local windowEnd = predictedBounceAbs + 1
 
-        logStep(string.format("Serve window open | bounceT=%.3f @ %s | windowEnd=%.3f", predictedBounceAbs, formatVector(bounceImpact and bounceImpact.pos), windowEnd))
-
         local hitResult = self:_awaitHit(ServePlayer, windowStart, windowEnd, predictedBounceAbs, currentBaked, currentStartTime, hitInbox)
+
         if hitResult and hitResult.ok then
+            warn("VALID SERVE by " .. ServePlayer.Name) -- ADDED LOGGING
+
             currentBaked = hitResult.baked
             currentStartTime = hitResult.time
-            lastHitterIndex = serverIndex
             broadcast(currentBaked, ServePlayer)
-            debugImpacts("[POINT][SERVE] After hit", currentBaked)
 
             local firstImpact = currentBaked.impacts and currentBaked.impacts[1] or nil
-            if not firstImpact then
-                winnerIndex, endReason = decideDeadBallWinner(serverIndex, "Serve produced no impacts (out)")
-                break
+            if not firstImpact or firstImpact.kind ~= "Court" then
+                faults += 1
+                warn("INVALID SERVE (did not hit court)") -- ADDED LOGGING
+                setBoxRed(getServerBox())                -- ADDED
+                task.wait(10)                            -- ADDED DELAY
+            else
+                break -- serve was valid
             end
 
-            if firstImpact.kind ~= "Court" then
-                logStep(string.format("Serve hit invalid: first impact %s", tostring(firstImpact.kind)))
-                faults += 1
-            else
-                local side = sideOfNet(self.Court.Net, firstImpact.pos)
-                logStep(string.format("Serve landed on %s side | pos=%s | t=%.3f", side, formatVector(firstImpact.pos), firstImpact.t))
-                if faults >= 2 then
-                    winnerIndex, endReason = receiverIndex, "Double fault before landing"
-                end
-                -- Valid serve, proceed to receiver window
-                break
-            end
         else
             faults += 1
-            logStep(string.format("Serve fault: no valid hit | attempt=%d | faults=%d", attempt, faults))
+            warn("INVALID SERVE: no valid hit received") -- ADDED
+            setBoxRed(getServerBox())                    -- ADDED
+            task.wait(10)                                -- ADDED DELAY
         end
 
         if faults >= 2 then
-            winnerIndex, endReason = receiverIndex, "Double fault (no serve contact)"
+            winnerIndex = receiverIndex
+            endReason = "Double fault"
             break
         end
     end
 
     if winnerIndex then
         cleanup()
-        logStep(string.format("Point ended early | %s", endReason))
-        print(("[POINT] Complete | Winner=P%d, Loser=P%d"):format(winnerIndex, winnerIndex == 1 and 2 or 1))
-        print("[POINT] History:\n\t" .. table.concat(history, "\n\t"))
         return winnerIndex
     end
 
-    -- Ensure we still have a valid serve trajectory
-    local firstImpact = currentBaked.impacts and currentBaked.impacts[1] or nil
-    if not firstImpact or firstImpact.kind ~= "Court" then
-        winnerIndex, endReason = receiverIndex, "Serve never reached court"
-    end
-
-    if winnerIndex then
-        cleanup()
-        logStep(string.format("Point ended after serve | %s", endReason))
-        print(("[POINT] Complete | Winner=P%d, Loser=P%d"):format(winnerIndex, winnerIndex == 1 and 2 or 1))
-        print("[POINT] History:\n\t" .. table.concat(history, "\n\t"))
-        return winnerIndex
-    end
+    -- serve was valid → clear red
+    resetServeBoxes()
+    enableServeBox(getServerBox())
 
     -- ================= RECEIVER WINDOW =================
     local serveBounce = nextImpactOfKind(currentBaked, "Court")
     local serveBounceAbs = serveBounce and (currentStartTime + serveBounce.t) or (currentStartTime + 1)
     local receiverWindowEnd = serveBounceAbs + 1
-    logStep(string.format("Receiver window | expected=%s | bounceT=%.3f @ %s | windowEnd=%.3f", ReceivePlayer.Name, serveBounceAbs, formatVector(serveBounce and serveBounce.pos), receiverWindowEnd))
 
     local hitResult = self:_awaitHit(ReceivePlayer, currentStartTime, receiverWindowEnd, serveBounceAbs, currentBaked, currentStartTime, hitInbox)
     if hitResult and hitResult.ok then
         currentBaked = hitResult.baked
         currentStartTime = hitResult.time
-        lastHitterIndex = receiverIndex
         broadcast(currentBaked, ReceivePlayer)
-        debugImpacts("[POINT][RECEIVER] After return", currentBaked)
     else
-        -- No valid return; wait for a second bounce to kill the point
         local secondBounce = nextImpactOfKind(currentBaked, "Court", serveBounce and serveBounce.t or 0)
         local secondBounceAbs = secondBounce and (currentStartTime + secondBounce.t) or (receiverWindowEnd + 0.5)
-        logStep(string.format("Receiver missed | waiting for second bounce at %.3f", secondBounceAbs))
-        while now() < secondBounceAbs do
-            task.wait(0.05)
-        end
-        winnerIndex, endReason = serverIndex, "Receiver failed to return before double bounce"
+        while now() < secondBounceAbs do task.wait(0.05) end
         cleanup()
-        logStep(endReason)
-        print(("[POINT] Complete | Winner=P%d, Loser=P%d"):format(winnerIndex, winnerIndex == 1 and 2 or 1))
-        print("[POINT] History:\n\t" .. table.concat(history, "\n\t"))
-        return winnerIndex
+        return serverIndex
     end
 
     -- ================= RALLY LOOP =================
@@ -393,40 +363,29 @@ function Point:Start(): number
         local bounceAbs = nextBounce and (currentStartTime + nextBounce.t) or (currentStartTime + 0.5)
         local windowEnd = bounceAbs + 1
 
-        logStep(string.format("Rally window | expected=%s | bounceT=%.3f @ %s | windowEnd=%.3f", expectedPlayer.Name, bounceAbs, formatVector(nextBounce and nextBounce.pos), windowEnd))
-
         local hit = self:_awaitHit(expectedPlayer, currentStartTime, windowEnd, bounceAbs, currentBaked, currentStartTime, hitInbox)
         if hit and hit.ok then
             currentBaked = hit.baked
             currentStartTime = hit.time
-            lastHitterIndex = expectedIndex
             broadcast(currentBaked, expectedPlayer)
-            debugImpacts("[POINT][RALLY] After hit", currentBaked)
             expectedIndex = expectedIndex == 1 and 2 or 1
         else
             local secondBounce = nextImpactOfKind(currentBaked, "Court", nextBounce and nextBounce.t or 0)
             local secondAbs = secondBounce and (currentStartTime + secondBounce.t) or (windowEnd + 0.5)
-            logStep(string.format("No valid hit from %s | waiting for second bounce at %.3f", expectedPlayer.Name, secondAbs))
-            while now() < secondAbs do
-                task.wait(0.05)
-            end
+            while now() < secondAbs do task.wait(0.05) end
             winnerIndex, endReason = decideDeadBallWinner(expectedIndex, "Double bounce / missed return")
             break
         end
 
         local badImpact = terminalNonCourtImpact(currentBaked)
         if badImpact then
-            winnerIndex, endReason = decideDeadBallWinner(lastHitterIndex, string.format("Ball died on %s before court", badImpact.kind))
+            winnerIndex, endReason = decideDeadBallWinner(expectedIndex, "Out / net")
             break
         end
     end
 
     cleanup()
-    winnerIndex = winnerIndex or receiverIndex
-    logStep(string.format("Point ended | %s", endReason))
-    print(("[POINT] Complete | Winner=P%d, Loser=P%d"):format(winnerIndex, winnerIndex == 1 and 2 or 1))
-    print("[POINT] History:\n\t" .. table.concat(history, "\n\t"))
-    return winnerIndex
+    return winnerIndex or receiverIndex
 end
 
 return Point
