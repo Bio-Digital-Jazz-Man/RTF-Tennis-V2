@@ -1,0 +1,1 @@
+game.Players.LocalPlayer:GetMouse().Icon = "rbxassetid://130187932892169"

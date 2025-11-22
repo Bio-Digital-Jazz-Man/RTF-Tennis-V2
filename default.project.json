@@ -1,0 +1,51 @@
+{
+    "name": "RTF Tennis",
+    "tree": {
+        "$className": "DataModel",
+        "ReplicatedStorage": {
+            "$className": "ReplicatedStorage",
+            "RojoScripts": {
+                "$className": "Folder",
+                "$path": "src/ReplicatedStorage/RojoScripts"
+            }
+        },
+        "ReplicatedFirst": {
+            "$className": "ReplicatedFirst",
+            "RojoScripts": {
+                "$className": "Folder",
+                "$path": "src/ReplicatedFirst/RojoScripts"
+            }
+        },
+        "ServerScriptService": {
+            "$className": "ServerScriptService",
+            "RojoScripts": {
+                "$className": "Folder",
+                "$path": "src/ServerScriptService/RojoScripts"
+            }
+        },
+        "ServerStorage" : {
+            "$className": "ServerStorage",
+            "RojoScripts": {
+                "$className": "Folder",
+                "$path": "src/ServerStorage/RojoScripts"
+            }
+        },
+        "StarterPlayer": {
+            "$className": "StarterPlayer",
+            "StarterPlayerScripts": {
+                "$className": "StarterPlayerScripts",
+                "RojoScripts": {
+                    "$className": "Folder",
+                    "$path": "src/StarterPlayer/StarterPlayerScripts/RojoScripts"
+                }
+            },
+            "StarterCharacterScripts": {
+                "$className": "StarterCharacterScripts",
+                "RojoScripts": {
+                    "$className": "Folder",
+                    "$path": "src/StarterPlayer/StarterCharacterScripts/RojoScripts"
+                }
+            }
+        }
+    }
+}
